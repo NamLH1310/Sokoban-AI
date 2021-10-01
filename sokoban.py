@@ -3,6 +3,7 @@ from time import time
 from math import sqrt
 import sys
 import tracemalloc
+from pathlib import Path
 
 exec_times = []
 memory_profile = []
@@ -32,7 +33,7 @@ class State:
         self.successors = []
 
 
-    def is_in_bound(self, x: int, y: int):
+    def is_in_bound(self, x: int, y: int) -> bool:
         return 0 <= x < self.height and 0 <= y < self.width
 
 
@@ -41,16 +42,17 @@ class State:
             ay: int,
             bx: int,
             by: int,
-            d: str):
+            d: str) -> None:
         if not self.is_in_bound(ax, ay) or not self.is_in_bound(bx, by):
             return
-        
+
         changed = False
         attempt = ax, ay
         new_box = bx, by
 
         if attempt not in self.walls:
             if attempt not in self.boxes or new_box not in self.boxes and new_box not in self.walls:
+
                 if attempt in self.boxes:
                     if new_box in self.dead_locks:
                         return
@@ -58,16 +60,17 @@ class State:
                     self.boxes.add(new_box)
                     changed = True
 
-                new_state = State(self.walls,
-                               self.boxes.copy(),
-                               self.storages.copy(),
-                               attempt,
-                               self.path + d,
-                               self.width,
-                               self.height,
-                               self.dead_locks,
-                               self,
-                               self.euclidean_hrs)
+                new_state = State(
+                                walls=self.walls,
+                                boxes=self.boxes.copy(),
+                                storages=self.storages,
+                                player=attempt,
+                                path=self.path + d,
+                                width=self.width,
+                                height=self.height,
+                                dead_locks=self.dead_locks,
+                                parent=self,
+                                euclidean_hrs=self.euclidean_hrs)
 
                 self.successors.append(new_state)
 
@@ -76,7 +79,7 @@ class State:
                     self.boxes.add(attempt)
 
 
-    def get_successors(self):
+    def get_successors(self) -> list:
         x, y = self.player
 
         # move up
@@ -87,29 +90,29 @@ class State:
         self.move(x, y - 1, x, y - 2, 'l')
         # move right
         self.move(x, y + 1, x, y + 2, 'r')
-        
+
         return self.successors
-    
-    
-    def has_reached_goal(self):
+
+
+    def has_reached_goal(self) -> bool:
         for box in self.boxes:
             if box not in self.storages:
                 return False
 
         return True
 
-    
-    def __eq__(self, obj):
+
+    def __eq__(self, obj) -> bool:
         if type(self) is type(obj):
             return self.boxes == obj.boxes and self.player == obj.player
         return False
 
 
-    def __ne__(self, obj):
+    def __ne__(self, obj) -> bool:
         return not self == obj
 
-    
-    def __hash__(self):
+
+    def __hash__(self) -> int:
         hash = 0
         for x, y in self.boxes:
             hash += x*31 + y
@@ -117,7 +120,7 @@ class State:
         return hash + self.player[0]*73 + self.player[1]
 
 
-    def load_map(self):
+    def load_map(self) -> (str, list):
         # Draw the map
         map = [[' ' for _ in range(self.width)] for _ in range(self.height)]
 
@@ -126,7 +129,7 @@ class State:
 
         for i, j in self.storages:
             map[i][j] = '.'
-        
+
         for i, j in self.boxes:
             if map[i][j] == '.':
                 map[i][j] = '*'
@@ -144,16 +147,16 @@ class State:
         for row in map:
             res += ''.join(row)
             res += '\n'
-        
-        return res, map
-    
 
-    def __str__(self):
+        return res, map
+
+
+    def __str__(self) -> str:
         drawed_map, _ = self.load_map()
         return drawed_map
 
 
-    def print_path(self):
+    def print_path(self) -> None:
         path = []
         current_state = self
         while current_state is not None:
@@ -177,7 +180,7 @@ class State:
             walk += 1
 
 
-    def euclidean(self):
+    def euclidean(self) -> float:
         x, y = self.player
 
         player_to_boxes = 0
@@ -193,10 +196,10 @@ class State:
             for box in self.boxes:
                 bx, by = box
                 boxes_to_storage += sqrt((bx - sx)**2 + (by - sy)**2)
-        
+
         return player_to_boxes + boxes_to_storage
 
-    def manhatten(self):
+    def manhatten(self) -> int:
         x, y = self.player
 
         player_to_boxes = 0
@@ -228,30 +231,29 @@ class Sokoban:
     '''
     An instance of sokoban game
     '''
-    def __init__(self,
-                map: list[str],
-                boxes: set,
-                storages: set,
-                player: (int, int)):
-        self.walls, self.width, self.height = self.get_map_info(map)
-        self.boxes = boxes
-        self.storages = storages
-        self.player = player
+    def __init__(self, map: list[str]):
+        self.width = self.height = 0
+        self.walls = set()
+        self.boxes = set()
+        self.storages = set()
+        self.player = (0, 0)
+        self.get_map_info(map)
 
     def get_map_info(self, map: list[str]):
-        '''
-        Return sokoban map information: coordinate of the wall, width, height
-        '''
-        walls = set()
-        width = len(map[0])
-        height = len(map)
-        
+        self.walls = set()
+        self.width = len(map[0])
+        self.height = len(map)
+
         for i, row in enumerate(map):
             for j, ch in enumerate(row):
                 if ch == '#':
-                    walls.add((i, j))
-        
-        return walls, width, height
+                    self.walls.add((i, j))
+                elif ch == '@' or ch == '!':
+                    self.player = (i, j)
+                elif ch == '$' or ch == '*':
+                    self.boxes.add((i, j))
+                elif ch != ' ':
+                    self.storages.add((i, j))
 
     def load_map(self):
         # Draw the map
@@ -263,7 +265,7 @@ class Sokoban:
 
         for i, j in self.walls:
             map[i][j] = '#'
-        
+
         for i, j in self.storages:
             map[i][j] = '.'
 
@@ -278,9 +280,9 @@ class Sokoban:
         for row in map:
             drawed_map += ''.join(row)
             drawed_map += '\n'
-        
+
         return drawed_map, map
-    
+
 
     def __str__(self):
         drawed_map, _ = self.load_map()
@@ -296,7 +298,7 @@ class DeadLockDetector:
         _, self.map = soko.load_map()
         self.dead_locks = self.find_dead_locks()
 
-    
+
     def find_dead_locks(self):
         dead_locks = set()
         for i, row in enumerate(self.map):
@@ -305,7 +307,7 @@ class DeadLockDetector:
                 if current not in self.walls and current not in self.storages:
                     if self.is_corner(current) or self.is_boundary(current):
                         dead_locks.add(current)
-        
+
         return dead_locks
 
 
@@ -322,7 +324,7 @@ class DeadLockDetector:
             or down in self.walls and left in self.walls\
             or left in self.walls and up in self.walls
 
-    
+
     def is_boundary(self, current: (int, int)) -> bool:
         x, y = current
 
@@ -342,7 +344,7 @@ class DeadLockDetector:
                     if (m, y - 1) not in self.walls:
                         return False
             return True
-        
+
         if right in self.walls:
             upbound = self.find_nearest_upbound(current)
             downbound = self.find_nearest_downbound(current)
@@ -379,7 +381,7 @@ class DeadLockDetector:
                     if (x + 1, m) not in self.walls:
                         return False
             return True
-        
+
         return False
 
 
@@ -396,7 +398,7 @@ class DeadLockDetector:
 
         return 0
 
-    
+
     def find_nearest_downbound(self, current) -> int:
         x, y = current
         x += 1
@@ -497,123 +499,91 @@ def astar(init_state):
                 visited_state.add(neighbor)
 
     return False, None
-    
+
 
 def main():
     sokobans = [
             Sokoban([
                     '########',
                     '###   ##',
-                    '#   # ##',
-                    '# #    #',
+                    '# $ # ##',
+                    '# #  . #',
                     '#    # #',
-                    '## #   #',
-                    '##   ###',
+                    '##$#.  #',
+                    '##@  ###',
                     '########',
-                    ],
-                    {(2, 2), (5, 2)},
-                    {(3, 5), (5, 4)},
-                    (6, 2)
-                    ),
+                    ]),
             Sokoban([
                     '########',
                     '###   ##',
-                    '#   # ##',
-                    '# #    #',
-                    '#    # #',
-                    '## #   #',
-                    '##   ###',
+                    '# $ # ##',
+                    '# #  . #',
+                    '# .  # #',
+                    '##$#.$ #',
+                    '##@  ###',
                     '########',
-                    ],
-                    {(2, 2), (5, 2), (5, 5)},
-                    {(4, 2), (5, 4), (3, 5)},
-                    (6, 2)
-                    ),
+                    ]),
             Sokoban([
                     '#######',
                     '###  ##',
-                    '##   ##',
-                    '#     #',
-                    '#   # #',
+                    '## . ##',
+                    '#@$$$ #',
+                    '#. .# #',
                     '# #   #',
                     '#   ###',
                     '#######',
-                    ],
-                    {(3, 2), (3, 3), (3, 4)},
-                    {(2, 3), (4, 1), (4, 3)},
-                    (3, 1)
-                    ),
+                    ]),
             Sokoban([
                     '#########',
                     '#  ###  #',
-                    '#       #',
-                    '#       #',
-                    '###   ###',
-                    '###   ###',
+                    '# $ * $ #',
+                    '#   !   #',
+                    '### .$###',
+                    '### . ###',
                     '#########',
-                    ],
-                    {(2, 2), (2, 4), (2, 6), (4, 5)},
-                    {(2, 4), (3, 4), (4, 4), (5, 4)},
-                    (3, 4)
-                    ),
+                    ]),
             Sokoban([
                     '#######',
                     '##   ##',
-                    '## # ##',
-                    '##    #',
-                    '#  #  #',
-                    '#    ##',
-                    '#  # ##',
+                    '## #$##',
+                    '## @  #',
+                    '# .#$ #',
+                    '# .  ##',
+                    '# .#$##',
                     '##   ##',
                     '#######',
-                    ],
-                    {(2, 4), (4, 4), (6, 4)},
-                    {(4, 2), (5, 2), (6, 2)},
-                    (3, 3)
-                    ),
+                    ]),
             Sokoban([
                     '##########',
                     '######  ##',
-                    '###     ##',
-                    '###   # ##',
-                    '#    #   #',
-                    '#        #',
+                    '###..   ##',
+                    '### $@# ##',
+                    '#  $ #.. #',
+                    '# $   $  #',
                     '####  ####',
                     '##########',
-                    ],
-                    {(3, 4), (4, 3), (5, 2), (5, 6)},
-                    {(2, 3), (2, 4), (4, 6), (4, 7)},
-                    (3, 5)
-                    ),
+                    ]),
             Sokoban([
                     '##########',
                     '######   #',
-                    '##     # #',
-                    '## #     #',
+                    '## $ . # #',
+                    '## # $$  #',
                     '## ## # ##',
-                    '#       ##',
+                    '#  $.$. ##',
                     '# ##   ###',
-                    '#     ####',
+                    '#  .@.####',
                     '##########',
-                    ],
-                    {(2, 3), (3, 5), (3, 6), (5, 3), (5, 5)},
-                    {(2, 5), (5, 4), (5, 6), (7, 3), (7, 5)},
-                    (7, 4)
-                    ),
+                    ]),
             Sokoban([
                     '#########',
                     '###   ###',
-                    '#   #  ##',
-                    '#      ##',
-                    '## # #  #',
-                    '##      #',
+                    '#  $#  ##',
+                    '#  .@.$##',
+                    '##.# #  #',
+                    '## $    #',
                     '###  ####',
                     '#########',
-                    ],
-                    {(2, 3), (3, 6), (5, 3)},
-                    {(3, 3), (3, 5), (4, 2)},
-                    (3, 4)
-                    ),
+                    ]),
             ]
 
     search = None
@@ -621,25 +591,28 @@ def main():
     while search_strategy := input('Type 1 to use DFS, 2 to use A star: '):
         if search_strategy == '1':
             search = dfs
-            filename = 'time_benchmark.txt'
+            filename = Path('time_benchmark_dfs.txt')
+            filename.touch(exist_ok=True)
             break
         if search_strategy == '2':
             search = astar
-            filename = 'time_benchmark_astar.txt'
+            filename = Path('time_benchmark_astar.txt')
+            filename.touch(exist_ok=True)
             break
-    
+
     for sokoban in sokobans:
         dead_locks = DeadLockDetector(sokoban).dead_locks
-        init_state = State(sokoban.walls,
-                            sokoban.boxes,
-                            sokoban.storages,
-                            sokoban.player,
-                            '',
-                            sokoban.width,
-                            sokoban.height,
-                            dead_locks,
-                            None,
-                            False)
+        init_state = State(
+                            walls=sokoban.walls,
+                            boxes=sokoban.boxes,
+                            storages=sokoban.storages,
+                            player=sokoban.player,
+                            path='',
+                            width=sokoban.width,
+                            height=sokoban.height,
+                            dead_locks=dead_locks,
+                            parent=None,
+                            euclidean_hrs=False)
 
         # trace memory
         ## tracemalloc.start()
